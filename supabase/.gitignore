@@ -1,0 +1,5 @@
+node_modules/
+.branches/
+.temp/
+.env
+package-lock.json
