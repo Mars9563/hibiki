@@ -40,6 +40,7 @@ jobs:
           context: ./server # build using server/ (so server/Dockerfile + .dockerignore apply)
           platforms: linux/arm64 # build AS arm64 -> npm ci fetches sharp's arm64 binary
           push: true # push the result to GHCR (not just build it)
-          tags: | # two tags on the same image:
+          # two tags on the same image: 'latest' (moving) + the commit SHA (traceable)
+          tags: |
             ghcr.io/mars9563/hibiki-server:latest
-            ghcr.io/mars9563/hibiki-server:${{ github.sha }} # exact commit -> traceable
+            ghcr.io/mars9563/hibiki-server:${{ github.sha }}
