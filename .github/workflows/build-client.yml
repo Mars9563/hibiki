@@ -1,0 +1,54 @@
+# Builds the client (Next.js) image for arm64 and pushes it to GHCR.
+# NOTE: the NEXT_PUBLIC_* values are baked in HERE, at build time — they are
+# browser variables that freeze into the JS bundle during `next build`.
+name: Build & Push Client
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - '.github/workflows/build-client.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-client:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./client
+          platforms: linux/arm64
+          push: true
+          # These are PUBLIC values (URL + anon key), safe to keep in the workflow.
+          # They differ from your compose (localhost) build ON PURPOSE: this is the
+          # PROD image, so it bakes the prod addresses. One image per environment.
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=https://supabase.mrsdev.in
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MzA4NTUyMCwiZXhwIjo0OTM4NzU5MTIwLCJyb2xlIjoiYW5vbiJ9.VYOGQZjY6iw2QBzjzWoULLe9ti3E95XOa8o_T9S5378
+            # This backend domain is created later in Phase 4 (ingress). A container
+            # from this image can't reach the socket until then — expected for now.
+            NEXT_PUBLIC_BACKEND_URL=https://backend-hibiki.mrsdev.in
+          tags: |
+            ghcr.io/mars9563/hibiki-client:latest
+            ghcr.io/mars9563/hibiki-client:${{ github.sha }}
