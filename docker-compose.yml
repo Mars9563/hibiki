@@ -1,0 +1,45 @@
+
+networks:
+  hibiki-net:
+    driver: bridge
+    
+services:
+  client:
+    container_name: hibiki-frontend
+    build: 
+      context: ./client/
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_SUPABASE_URL=https://supabase.mrsdev.in
+        - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MzA4NTUyMCwiZXhwIjo0OTM4NzU5MTIwLCJyb2xlIjoiYW5vbiJ9.VYOGQZjY6iw2QBzjzWoULLe9ti3E95XOa8o_T9S5378
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:5000
+    ports:
+      - "3000:3000"
+    env_file:
+      - client/.env
+    restart: 'always'
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - hibiki-net
+    
+  server:
+    container_name: hibiki-backend
+    build:
+      context: ./server/
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    env_file:
+      - server/.env
+    restart: 'always'
+    networks:
+      - hibiki-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+          

@@ -10,7 +10,11 @@ const app = express();
 
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:3000',
+    origin: [
+      "http://localhost:3000",
+      process.env.ALLOWED_ORIGIN ?? '',
+      
+    ],
     credentials: true,
   })
 );

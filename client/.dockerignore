@@ -1,0 +1,6 @@
+.next
+node_modules
+.env
+code_dump.creator.sh
+tsconfig.tsbuildinfo
+next-env.d.ts
