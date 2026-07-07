@@ -1,6 +1,7 @@
 # Dependencies
 /node_modules
-/package-lock.json
+# NOTE: lock files SHOULD be committed (reproducible installs, needed by `npm ci`).
+# /yarn.lock left ignored only because this project uses npm, not yarn.
 /yarn.lock
 
 # Environment Variables
