@@ -15,8 +15,8 @@ spec:
     spec:
       hostAliases:
         - ip: "10.0.0.112"
-           hostnames:
-             - "supabase.mrsdev.in"
+          hostnames:
+            - "supabase.mrsdev.in"
       imagePullSecrets:
         - name: ghcr-pull           # use our GHCR creds to pull the private image
       containers:
