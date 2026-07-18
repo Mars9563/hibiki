@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hibiki-client
+  namespace: hibiki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hibiki-client
+  template:
+    metadata:
+      labels:
+        app: hibiki-client
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: hibiki-client
+          image: ghcr.io/mars9563/hibiki-client:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: HOSTNAME              # FIX: k8s sets HOSTNAME=<pod-name>; Next binds to it.
+              value: "0.0.0.0"            # Force it to listen on ALL interfaces instead.
+            - name: BACKEND_BASE_URL
+              value: "http://hibiki-server:5000"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hibiki-client
+  namespace: hibiki
+spec:
+  selector:
+    app: hibiki-client
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: ClusterIP

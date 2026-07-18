@@ -1,0 +1,29 @@
+apiVersion: apps/v1                 # Deployments live in the "apps" API group
+kind: Deployment                    # what kind of object this is
+metadata:
+  name: hibiki-server               # the Deployment's name
+  namespace: hibiki                 # lives in our namespace
+spec:
+  replicas: 1                       # run ONE pod for now (Socket.IO needs a Redis adapter before >1 — Phase 5)
+  selector:
+    matchLabels:
+      app: hibiki-server            # this Deployment owns pods carrying this label...
+  template:                         # ...and this is the blueprint it stamps them from:
+    metadata:
+      labels:
+        app: hibiki-server          # <-- MUST match the selector above, or the Deployment finds nothing
+    spec:
+      hostAliases:
+        - ip: "10.0.0.112"
+           hostnames:
+             - "supabase.mrsdev.in"
+      imagePullSecrets:
+        - name: ghcr-pull           # use our GHCR creds to pull the private image
+      containers:
+        - name: hibiki-server
+          image: ghcr.io/mars9563/hibiki-server:latest
+          ports:
+            - containerPort: 5000   # the port the app listens on (informational)
+          envFrom:
+            - secretRef:
+                name: hibiki-server-env   # inject ALL keys from that Secret as env vars

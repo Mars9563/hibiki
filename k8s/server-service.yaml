@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hibiki-server          # this NAME becomes the DNS name: http://hibiki-server:5000
+  namespace: hibiki
+spec:
+  selector:
+    app: hibiki-server         # routes to pods with this label (your Deployment's pods)
+  ports:
+    - port: 5000               # the port the Service listens on
+      targetPort: 5000         # the port on the pod it forwards to
+  type: ClusterIP              # internal-only stable address (the default)
