@@ -11,7 +11,7 @@ on:
 
 # Scopes for the auto-issued GITHUB_TOKEN (a fresh token minted for each run).
 permissions:
-  contents: read # let 'checkout' read the repo
+  contents: write # 'checkout' reads the repo AND the deploy step commits the manifest bump
   packages: write # let the token push to GHCR — omit this and the push 403s
 
 jobs:
@@ -44,3 +44,29 @@ jobs:
           tags: |
             ghcr.io/mars9563/hibiki-server:latest
             ghcr.io/mars9563/hibiki-server:${{ github.sha }}
+
+      # ---- CD: write the freshly-built image's SHA into the k8s manifest and commit.
+      # Argo CD watches k8s/ on main and auto-syncs -> rolling deploy. No build loop:
+      # this only edits k8s/**, which is NOT in this workflow's path filter.
+      - name: Deploy (bump manifest -> Argo CD syncs)
+        run: |
+          set -eu
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Reset-and-retry: each attempt re-syncs to the newest main by hand, so a race
+          # with the client job (which edits a different file) can never conflict.
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet origin main
+            git reset --quiet --hard origin/main
+            sed -i -E "s#(image: ghcr\.io/mars9563/hibiki-server:).*#\1${GITHUB_SHA}#" k8s/server-deployment.yaml
+            git add k8s/server-deployment.yaml
+            if git diff --cached --quiet; then
+              echo "manifest already at ${GITHUB_SHA} — nothing to deploy"; exit 0
+            fi
+            git commit --quiet -m "cd: deploy hibiki-server @ ${GITHUB_SHA} [skip ci]"
+            if git push origin HEAD:main; then
+              echo "deployed hibiki-server @ ${GITHUB_SHA} (attempt ${attempt})"; exit 0
+            fi
+            echo "push race on attempt ${attempt}; retrying"; sleep $(( (RANDOM % 4) + 1 ))
+          done
+          echo "ERROR: failed to push manifest bump after 5 attempts"; exit 1
