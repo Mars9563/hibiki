@@ -1,5 +1,5 @@
-FROM node:22-bookworm-slim as base
-
+FROM node:22-alpine as base
+RUN apk add --no-cache libc6-compat
 WORKDIR /client/
 
 COPY package.json package-lock.json ./
@@ -16,7 +16,7 @@ ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 RUN npm run build
 
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-alpine AS runtime
 
 WORKDIR /client/
 

@@ -1,6 +1,6 @@
 # ---- Stage 1: build ----
 # Full toolchain here: dev deps + TypeScript compiler. None of this ships to prod.
-FROM node:22-bookworm-slim AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN npx tsc --outDir dist
 
 # ---- Stage 2: runtime ----
 # Lean image: production deps only + the compiled JS. No tsx, no compiler, no source.
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-alpine AS runtime
 
 ENV NODE_ENV=production
 
