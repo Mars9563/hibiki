@@ -8,5 +8,6 @@ spec:
     app: hibiki-server         # routes to pods with this label (your Deployment's pods)
   ports:
     - port: 5000               # the port the Service listens on
-      targetPort: 5000         # the port on the pod it forwards to
-  type: ClusterIP              # internal-only stable address (the default)
+      targetPort: 5000
+      nodePort: 30081
+  type: NodePort              # internal-only stable address (the default)
