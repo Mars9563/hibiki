@@ -21,7 +21,7 @@ spec:
         - name: ghcr-pull           # use our GHCR creds to pull the private image
       containers:
         - name: hibiki-server
-          image: ghcr.io/mars9563/hibiki-server:latest
+          image: ghcr.io/mars9563/hibiki-server:44773e40baca994b48504b9ff4f43b59b5bee820
           ports:
             - containerPort: 5000   # the port the app listens on (informational)
           envFrom:
