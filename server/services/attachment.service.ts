@@ -40,7 +40,7 @@ export const MAX_FILES_PER_MESSAGE = 10;
 // pattern as avatars) — 10 files x 25MB could mean 250MB held in RAM
 // for one request. This bounds the realistic worst case without
 // touching the per-file limit.
-const MAX_TOTAL_UPLOAD_SIZE = 75 * 1024 * 1024;
+export const MAX_TOTAL_UPLOAD_SIZE = 75 * 1024 * 1024;
 
 export const MIME_ALLOWLIST: Record<string, AttachmentType> = {
   'image/jpeg': 'image',
@@ -122,8 +122,14 @@ function deriveMessageType(attachmentTypes: AttachmentType[]): MessageType {
 // only fetched when opened in the lightbox.
 const THUMBNAIL_MAX_DIMENSION = 400;
 
+// A tiny, highly compressible file can decode to gigabytes of pixels
+// (decompression bomb). Sharp's default cap is ~268 megapixels (~1 GB
+// decoded); 50 MP covers any real photo and keeps worst-case RAM bounded.
+// Over the cap, sharp throws and the caller skips the thumbnail.
+const THUMBNAIL_MAX_INPUT_PIXELS = 50_000_000;
+
 async function generateThumbnail(buffer: Buffer): Promise<Buffer> {
-  return sharp(buffer)
+  return sharp(buffer, { limitInputPixels: THUMBNAIL_MAX_INPUT_PIXELS })
     .rotate() // honor EXIF orientation before stripping metadata
     .resize(THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION, {
       fit: 'inside',
@@ -202,39 +208,45 @@ export async function createMessageWithAttachments({
     };
   });
 
-  const uploaded: typeof prepared = [];
-  try {
-    await Promise.all(
-      prepared.map(async (item) => {
-        await uploadAttachment(
-          item.file.buffer,
-          item.objectKey,
-          item.file.mimetype
-        );
+  // allSettled, not all: Promise.all rejects on the first failure while the
+  // other uploads are still in flight, so a cleanup run at that moment would
+  // miss objects that finish uploading a moment later (orphans in R2).
+  // Waiting for every upload to settle makes the cleanup set complete.
+  const keysFor = (item: (typeof prepared)[number]) => [
+    item.objectKey,
+    ...(item.thumbnailKey ? [item.thumbnailKey] : []),
+  ];
+  const cleanupUploads = () =>
+    Promise.allSettled(prepared.flatMap((item) => keysFor(item).map(deleteAttachment)));
 
-        // Thumbnails are a best-effort nicety: a failure here (odd
-        // codec, corrupt pixels) must not sink the whole message — the
-        // bubble just falls back to the full image via onError.
-        if (item.thumbnailKey) {
-          try {
-            const thumb = await generateThumbnail(item.file.buffer);
-            await uploadAttachment(thumb, item.thumbnailKey, 'image/webp');
-          } catch (thumbErr) {
-            console.error(`Thumbnail failed for ${item.objectKey}:`, thumbErr);
-          }
+  const uploadResults = await Promise.allSettled(
+    prepared.map(async (item) => {
+      await uploadAttachment(
+        item.file.buffer,
+        item.objectKey,
+        item.file.mimetype
+      );
+
+      // Thumbnails are a best-effort nicety: a failure here (odd
+      // codec, corrupt pixels) must not sink the whole message — the
+      // bubble just falls back to the full image via onError.
+      if (item.thumbnailKey) {
+        try {
+          const thumb = await generateThumbnail(item.file.buffer);
+          await uploadAttachment(thumb, item.thumbnailKey, 'image/webp');
+        } catch (thumbErr) {
+          console.error(`Thumbnail failed for ${item.objectKey}:`, thumbErr);
         }
+      }
+    })
+  );
 
-        uploaded.push(item);
-      })
+  if (uploadResults.some((r) => r.status === 'rejected')) {
+    console.error(
+      'R2 upload error:',
+      uploadResults.filter((r) => r.status === 'rejected')
     );
-  } catch (err) {
-    console.error('R2 upload error:', err);
-    await Promise.allSettled(
-      uploaded.flatMap((item) => [
-        deleteAttachment(item.objectKey),
-        ...(item.thumbnailKey ? [deleteAttachment(item.thumbnailKey)] : []),
-      ])
-    );
+    await cleanupUploads();
     throw new AttachmentServiceError(502, 'Failed to upload one or more files');
   }
 
@@ -258,12 +270,7 @@ export async function createMessageWithAttachments({
 
   if (rpcError || !result) {
     console.error('create_message_with_attachments RPC error:', rpcError);
-    await Promise.allSettled(
-      prepared.flatMap((item) => [
-        deleteAttachment(item.objectKey),
-        ...(item.thumbnailKey ? [deleteAttachment(item.thumbnailKey)] : []),
-      ])
-    );
+    await cleanupUploads();
     throw new AttachmentServiceError(500, 'Failed to save message');
   }
 

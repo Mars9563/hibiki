@@ -13,6 +13,13 @@ spec:
       labels:
         app: hibiki-client
     spec:
+      automountServiceAccountToken: false  # the app never talks to the Kubernetes API
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000                    # the image's unprivileged `node` user
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       imagePullSecrets:
         - name: ghcr-pull
       containers:
@@ -25,6 +32,40 @@ spec:
               value: "0.0.0.0"            # Force it to listen on ALL interfaces instead.
             - name: BACKEND_BASE_URL
               value: "http://hibiki-server:5000"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:                      # measured use is ~50Mi / ~0m CPU
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 512Mi                # Next buffers uploads it proxies (up to ~25MB each)
+          readinessProbe:                  # /login is public and does no downstream calls without a session cookie
+            httpGet: { path: /login, port: 3000 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:                   # TCP only: don't restart the UI because a dependency is slow
+            tcpSocket: { port: 3000 }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: next-cache               # Next's image-optimizer cache; the app dir itself is read-only
+              mountPath: /client/.next/cache
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: next-cache
+          emptyDir:
+            sizeLimit: 256Mi
 ---
 apiVersion: v1
 kind: Service

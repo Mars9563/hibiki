@@ -27,9 +27,11 @@ for file in "$MIGRATIONS_DIR"/*.sql; do
   fi
 
   echo "apply $base"
-  remote_psql < "$file"
-  remote_psql <<SQL
-INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('$version', '$name');
-SQL
+  # One transaction for the migration AND its bookkeeping row: either both land or
+  # neither does (ON_ERROR_STOP + --single-transaction rolls everything back on error).
+  {
+    cat "$file"
+    printf "\nINSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ('%s', '%s');\n" "$version" "$name"
+  } | remote_psql --single-transaction
   echo "done  $base"
 done

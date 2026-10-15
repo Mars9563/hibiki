@@ -17,11 +17,31 @@ function userOrIpKey(req: Request): string {
 // Blunt safety net on every /api/* route — runs before auth even
 // fires, so this one is always IP-based. Generous enough that no
 // real usage pattern should ever hit it.
+//
+// "IP" means the real client address: app.ts sets `trust proxy` so
+// Express reads it from X-Forwarded-For (written by Traefik, and
+// forwarded by the Next.js route handlers via client/lib/backend.ts).
+// Without that, every REST call arrives from the Next.js pod and ALL
+// users share a single bucket.
 export const defaultLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please slow down.' },
+});
+
+// Per-user ceiling on all authenticated /api traffic. Runs after
+// authMiddleware, so it is keyed by the verified user id: one user's
+// burst can never consume another user's budget (unlike an IP bucket,
+// which is shared by everyone behind the same NAT). Sized well above
+// normal use — app boot is ~(3 + number of rooms) requests.
+export const userLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 900,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userOrIpKey,
   message: { success: false, message: 'Too many requests, please slow down.' },
 });
 

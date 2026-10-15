@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 export async function GET(req: Request) {
   try {
@@ -39,6 +40,7 @@ export async function GET(req: Request) {
       {
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(await forwardedForHeader()),
         },
       }
     );

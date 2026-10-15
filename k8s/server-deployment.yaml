@@ -13,6 +13,13 @@ spec:
       labels:
         app: hibiki-server          # <-- MUST match the selector above, or the Deployment finds nothing
     spec:
+      automountServiceAccountToken: false  # the app never talks to the Kubernetes API; don't hand it a token
+      securityContext:                     # pod-wide: never root, default seccomp filter
+        runAsNonRoot: true
+        runAsUser: 1000                    # the image's unprivileged `node` user
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       hostAliases:
         - ip: "10.0.0.112"
           hostnames:
@@ -27,3 +34,33 @@ spec:
           envFrom:
             - secretRef:
                 name: hibiki-server-env   # inject ALL keys from that Secret as env vars
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true   # nothing is written to the image; /tmp below is the scratch space
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:                      # what the scheduler reserves (measured use is ~50Mi / ~1m CPU)
+              cpu: 50m
+              memory: 128Mi
+            limits:                        # memory is capped so a bug or abusive upload can't take the whole VPS
+              memory: 1Gi                  # room for 4 concurrent 75MB uploads (see middleware/uploadGuard.ts) + Sharp
+              # no CPU limit on purpose: CFS throttling hurts latency, and the node is shared
+          readinessProbe:                  # gate traffic and rollouts: a new pod must answer before the old one is removed
+            httpGet: { path: /, port: 5000 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:                   # restart only if it is truly wedged (generous: the node is busy)
+            httpGet: { path: /, port: 5000 }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi

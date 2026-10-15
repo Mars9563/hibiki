@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 export async function GET() {
   try {
@@ -26,6 +27,7 @@ export async function GET() {
     const response = await fetch(`${process.env.BACKEND_BASE_URL}/api/rooms`, {
       headers: {
         Authorization: `Bearer ${token}`,
+        ...(await forwardedForHeader()),
       },
     });
 

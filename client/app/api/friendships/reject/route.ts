@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 export async function DELETE(req: Request) {
   try {
@@ -40,6 +41,7 @@ export async function DELETE(req: Request) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(await forwardedForHeader()),
         },
         body: JSON.stringify({ targetId }),
       }

@@ -2,6 +2,7 @@ import { AppBootstrap } from '@/features/chat/AppBootStrap';
 import { ChatLayout } from '@/features/chat/layout/ChatLayout';
 import { createClient } from '@/lib/supabase/server';
 import type { Profile } from '@/lib/types';
+import { forwardedForHeader } from '@/lib/backend';
 
 export default async function Home() {
   let userData: Profile | null = null;
@@ -23,6 +24,7 @@ export default async function Home() {
       {
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(await forwardedForHeader()),
         },
       }
     );

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 export async function POST(req: Request) {
   try {
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        ...(await forwardedForHeader()),
       },
       body: JSON.stringify({ name, inviteeIds: inviteeIds ?? [] }),
     });

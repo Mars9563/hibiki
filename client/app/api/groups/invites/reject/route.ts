@@ -1,6 +1,7 @@
 // app/api/group-invites/reject/route.ts
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 export async function DELETE(req: Request) {
   try {
@@ -41,6 +42,7 @@ export async function DELETE(req: Request) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(await forwardedForHeader()),
         },
         body: JSON.stringify({ inviteId }),
       }

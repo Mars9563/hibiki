@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 export async function GET(req: Request) {
   try {
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
 
     const response = await fetch(
       `${process.env.BACKEND_BASE_URL}/api/groups/search?q=${encodeURIComponent(query)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}`, ...(await forwardedForHeader()) } }
     );
 
     const data = await response.json();

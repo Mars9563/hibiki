@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 // Forwards the browser's multipart form data straight through to
 // Express as-is (name/username fields + an optional avatar file, all
@@ -37,6 +38,7 @@ export async function PATCH(req: Request) {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(await forwardedForHeader()),
           // Deliberately no Content-Type — fetch sets the correct
           // multipart boundary itself when the body is a FormData.
         },

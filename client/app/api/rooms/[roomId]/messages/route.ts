@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 // Same reasoning as app/api/personal/me/route.ts — req.formData()
 // followed by a re-built FormData keeps files as real Blobs instead
@@ -38,6 +39,7 @@ export async function POST(
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(await forwardedForHeader()),
           // No Content-Type — fetch sets the multipart boundary
           // itself when the body is a FormData.
         },

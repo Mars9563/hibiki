@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { forwardedForHeader } from '@/lib/backend';
 
 // Changes a participant's role (used to promote a member to admin).
 // Admin authorization is enforced server-side.
@@ -46,6 +47,7 @@ export async function PATCH(
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(await forwardedForHeader()),
         },
         body: JSON.stringify({ role }),
       }

@@ -21,9 +21,13 @@ import { createUserClient } from '../config/supabase.js';
 import multer from 'multer';
 import { getIo } from '../socket/index.js';
 import { uploadLimiter } from '../middleware/rateLimiter.js';
+import { limitBodySize, limitConcurrency } from '../middleware/uploadGuard.js';
 import { getAttachmentUrls } from '../config/r2.js';
 import {
   AttachmentServiceError,
+  MAX_FILES_PER_MESSAGE,
+  MAX_FILE_SIZE,
+  MAX_TOTAL_UPLOAD_SIZE,
   createMessageWithAttachments,
   isAllowedMimeType,
 } from '../services/attachment.service.js';
@@ -151,7 +155,14 @@ router.get('/messages', async (req, res) => {
 
 const uploadFiles = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024, files: 10 },
+  // fields/parts bound the number of multipart sections, so a request of
+  // thousands of tiny parts can't burn CPU/RAM either.
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: MAX_FILES_PER_MESSAGE,
+    fields: 10,
+    parts: MAX_FILES_PER_MESSAGE + 10,
+  },
   fileFilter: (_req, file, cb) => {
     // Cheap first pass on the declared mimetype before buffering
     // into memory. The real check — verifying actual bytes — happens
@@ -168,10 +179,45 @@ const uploadFiles = multer({
 // Creates a message with one or more attachments. Requires at least
 // one file — text-only messages still go through the existing
 // message:send socket event. content is an optional caption.
+// Multer reports limit/filter violations through next(err); without this
+// they fall through to Express's default handler as a non-JSON 500.
+const parseUpload: express.RequestHandler = (req, res, next) => {
+  uploadFiles.array('files', MAX_FILES_PER_MESSAGE)(req, res, (err: unknown) => {
+    if (!err) return next();
+    // limitBodySize may already have answered (413) and torn down the
+    // request; Multer then reports the aborted stream here. Replying a
+    // second time would throw ERR_HTTP_HEADERS_SENT and crash the process.
+    if (res.headersSent) return;
+    if (err instanceof multer.MulterError) {
+      const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return res.status(status).json({
+        success: false,
+        message:
+          err.code === 'LIMIT_FILE_SIZE'
+            ? 'A file exceeds the 25MB limit'
+            : 'Invalid upload (too many files or parts)',
+      });
+    }
+    if (err instanceof Error && err.message === 'Unsupported file type') {
+      return res
+        .status(415)
+        .json({ success: false, message: 'Unsupported file type' });
+    }
+    // Client aborted / malformed multipart body.
+    return res
+      .status(400)
+      .json({ success: false, message: 'Malformed upload request' });
+  });
+};
+
 router.post(
   '/rooms/:roomId/messages',
   uploadLimiter,
-  uploadFiles.array('files', 10),
+  // Order matters: cheap rejections first, so a refused request never
+  // buffers a byte. See middleware/uploadGuard.ts.
+  limitBodySize(MAX_TOTAL_UPLOAD_SIZE),
+  limitConcurrency({ maxGlobal: 4, maxPerUser: 2 }),
+  parseUpload,
   async (req, res) => {
     try {
       const senderId = req.userId as string;

@@ -1,0 +1,88 @@
+# Root safety net for the whole monorepo. client/, server/ and supabase/ keep their own
+# .gitignore files; these rules apply everywhere and only add to them.
+
+# ── Private operations notes ────────────────────────────────────────────────────────────
+# Machine-specific operations notes and the private audit report (hostnames, container names,
+# paths, unresolved infrastructure findings). Never commit these.
+docs/private/
+
+# ── Secrets and credentials ─────────────────────────────────────────────────────────────
+# Environment files. Templates (.env.example, .env.sample) stay trackable.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.*.example
+!.env.*.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+kubeconfig
+*.kubeconfig
+# Kubernetes Secret manifests (the cluster's secrets are created out of band)
+*.secret.yaml
+*.secret.yml
+*-secret.yaml
+*-secret.yml
+k8s/secrets/
+secrets/
+
+# ── Dependencies ────────────────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ── Build output and generated files ────────────────────────────────────────────────────
+.next/
+out/
+dist/
+coverage/
+.nyc_output/
+.turbo/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Logs and caches ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.eslintcache
+.cache/
+.npm/
+
+# ── Database dumps and backups (can contain user data) ──────────────────────────────────
+backups/
+*.dump
+*.bak
+*.sql.gz
+
+# ── Supabase CLI local state ────────────────────────────────────────────────────────────
+supabase/.branches/
+supabase/.temp/
+
+# ── Local scratch, code dumps and temp files ────────────────────────────────────────────
+code_dump*
+*_code_dump.txt
+*.tmp
+*.swp
+*.swo
+*~
+
+# ── OS and editor files ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

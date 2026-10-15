@@ -1,174 +1,161 @@
-# Hibiki — Client
+# Hibiki: Client
 
-The frontend for Hibiki, a real-time messaging app. Built with Next.js and Socket.IO, using Supabase for authentication.
+The frontend for [Hibiki](../README.md): a Next.js 16 (App Router) app that renders the chat UI, keeps all client state in a Zustand store, and talks to the backend through same-origin route handlers plus a direct Socket.IO connection.
 
----
-
-## Tech Stack
-
-- **Framework** — Next.js 15 (App Router)
-- **Language** — TypeScript
-- **Auth** — Supabase (client + server-side)
-- **Real-time** — Socket.IO client
-- **State Management** — Zustand
-- **Data Fetching** — TanStack Query
-- **Forms** — React Hook Form + Zod
-- **UI** — Custom pixel-art component library (Pixelact UI)
+- **Production:** https://hibiki.mrsdev.in
+- **API reference:** [docs/API.md](../docs/API.md) (see the *Next.js proxy map*)
+- **Architecture:** [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
 
 ---
 
-## Project Structure
+## Tech stack
+
+| | |
+|---|---|
+| Framework | Next.js 16 (App Router, `output: 'standalone'`), React 19, TypeScript |
+| Styling | Tailwind CSS 4, shadcn/ui primitives on Radix, a custom pixel-art kit (Pixelact UI), `next-themes` for light and dark |
+| State | Zustand with Immer, split into slices |
+| Real-time | `socket.io-client` |
+| Auth | `@supabase/ssr` (cookie sessions) and `@supabase/supabase-js` |
+| Forms and validation | React Hook Form with Zod |
+| Media | `react-easy-crop` (avatar cropping), `pdfjs-dist` (PDF thumbnails), `media-chrome` (audio and video), `yet-another-react-lightbox` (image viewer) |
+
+## Project structure
 
 ```
 client/
+├── proxy.ts                      # Next 16 "proxy" (formerly middleware): refreshes the Supabase session, redirects to /login
+├── next.config.ts                # standalone output, Cloudinary image host, 25 MB proxy body limit
 ├── app/
-│   ├── layout.tsx              # Root layout (fonts, theme, toast)
-│   ├── globals.css
-│   ├── (auth)/
-│   │   ├── login/page.tsx      # Login page
-│   │   └── register/page.tsx   # Register page
-│   ├── (app)/
-│   │   ├── layout.tsx          # Protected layout (auth guard + user data fetch)
-│   │   └── page.tsx            # Main chat page
-│   └── api/
-│       ├── rooms/route.ts      # Proxy → backend /api/rooms
-│       ├── messages/route.ts   # Proxy → backend /api/messages
-│       └── friendships/
-│           ├── request/        # Proxy → POST /api/friendships/request
-│           ├── accept/         # Proxy → POST /api/friendships/accept
-│           ├── reject/         # Proxy → DELETE /api/friendships/reject
-│           ├── pending/        # Proxy → GET /api/friendships/pending
-│           └── search/         # Proxy → GET /api/friendships/search
+│   ├── layout.tsx                # Root layout: fonts, theme, toaster
+│   ├── (auth)/login, register    # Public pages
+│   ├── (app)/page.tsx            # The chat app. Server component: loads the profile, then renders <AppBootstrap>
+│   └── api/                      # Route handlers: cookie session → Bearer token → backend (see docs/API.md)
+│       ├── rooms, messages
+│       ├── rooms/[roomId]/messages
+│       ├── personal/me
+│       ├── friendships/{search,pending,request,accept,reject}
+│       └── groups/…              # create, search, [roomId], invites, participants, invites/{pending,accept,reject}
+├── store/
+│   ├── chatStore.ts              # Composes every slice into one store
+│   ├── selectors.ts
+│   └── slices/
+│       ├── createAuthSlice.ts        # currentUser
+│       ├── createUiSlice.ts          # view mode, selected room, panels
+│       ├── createRoomSlice.ts        # rooms (direct and group), ordering
+│       ├── createMessageSlice.ts     # per-room messages, cursor pagination, optimistic send
+│       ├── createFriendshipSlice.ts  # search, pending requests, accept/reject
+│       ├── createGroupSlice.ts       # group create/edit/invite/roles
+│       ├── createSocketSlice.ts      # socket lifecycle and every event listener
+│       └── createComposerSlice.ts    # files staged before sending
+├── features/chat/                # Feature UI, grouped by area
+│   ├── AppBootStrap.tsx          # Boot sequence (see below)
+│   ├── layout/                   # ChatLayout, ViewListContainer, LoadingScreen, ViewportHeightSync
+│   ├── sidebar/                  # Icon sidebar, theme toggle
+│   ├── rooms/                    # Room list
+│   ├── RoomView/                 # Direct and group room views
+│   ├── ui/                       # ChatArea, TopBar, MessageArea, MessageBubble, ChatInput, AttachmentPreview, …
+│   ├── messages/                 # Renderers per attachment type: image, video, audio, pdf, generic file
+│   ├── groups/                   # Create, edit, add participant, invite dialogs
+│   ├── requests/                 # Friend search and pending requests
+│   └── userpanel/                # Profile settings
 ├── components/
-│   ├── auth/
-│   │   ├── login-form.tsx      # Login form (email + password)
-│   │   └── register.tsx        # Register form (name, username, email, password)
-│   └── ui/
-│       ├── pixelact-ui/        # Custom pixel-art UI components
-│       └── ...                 # Shadcn-based utility components
-├── features/
-│   └── chat/
-│       ├── layout/
-│       │   ├── ChatLayout.tsx          # Top-level chat layout (sidebar + list + area)
-│       │   └── ViewListContainer.tsx   # Switches between rooms, requests, user panel
-│       ├── sidebar/
-│       │   └── Sidebar.tsx             # Icon sidebar (navigation + logout)
-│       ├── ui/
-│       │   ├── ChatArea.tsx            # Right panel (topbar + messages + input)
-│       │   ├── TopBar.tsx              # Chat header with other user's info
-│       │   ├── MessageArea.tsx         # Scrollable message list with date separators
-│       │   ├── MessageBubble.tsx       # Individual message bubble (with status icons)
-│       │   ├── ChatInput.tsx           # Message input with optimistic send
-│       │   ├── useMessages.tsx         # Zustand store for all messages
-│       │   └── dateSeperator.tsx       # Date separator between messages
-│       ├── rooms/                      # Rooms list panel
-│       ├── requests/                   # Friend requests panel
-│       ├── userpanel/                  # User settings panel
-│       ├── context/
-│       │   └── chat-ui-context.tsx     # View mode + selected room context
-│       └── socket/
-│           └── ChatSocketSync.tsx      # Listens to socket events, syncs to store
-├── providers/
-│   ├── toast-provider.tsx      # Sonner toast setup
-│   ├── theme-provider.tsx      # next-themes dark/light mode
-│   ├── query-provider.tsx      # TanStack Query client
-│   ├── socket-provider.tsx     # Socket.IO connection lifecycle
-│   └── user-provider.tsx       # Logged-in user context
+│   ├── auth/                     # Login and register forms, verify-email toast
+│   └── ui/                       # shadcn components, and pixelact-ui/ (pixel-art variants)
 ├── lib/
-│   ├── supabase/
-│   │   ├── client.ts           # Supabase browser client
-│   │   └── server.ts           # Supabase server client (for RSC + middleware)
-│   ├── socket.ts               # Socket.IO client instance
-│   └── types.ts                # Shared TypeScript types
-└── server/
-    └── actions/
-        └── auth/
-            └── register.ts     # Server action for user registration
+│   ├── supabase/{client,server,proxy}.ts   # Browser client, server client, session refresh helper
+│   ├── types.ts                  # Shared types (Profile, rooms, messages, attachments)
+│   ├── backend.ts                # forwardedForHeader(): passes the browser's IP to the backend for rate limiting
+│   ├── attachments.ts            # Client-side limits and formatting
+│   ├── cropImage.ts, pdf.ts      # Avatar cropping, PDF thumbnail helper
+│   └── utils.ts
+├── providers/                    # theme-provider, toast-provider
+└── server/actions/auth/register.ts  # Server action: validates and calls supabase.auth.signUp
 ```
 
----
+## How it works
 
-## How It Works
+### Boot sequence
 
-### Authentication
+`app/(app)/page.tsx` runs on the server: it reads the Supabase session cookie and fetches `/api/personal/me` from the backend, then hands the profile to `<AppBootstrap>`. On the client, `AppBootstrap` runs once:
 
-Auth is handled entirely by Supabase. On login/register, Supabase sets a session cookie. The protected `(app)` layout checks this cookie server-side and redirects to `/login` if no valid session is found.
+1. Fetch rooms, pending friend requests and pending group invites in parallel.
+2. Preload the most recent page of messages for every room.
+3. **Then** connect the Socket.IO client with the access token and send one `rooms:joinMany`.
+4. Hide the loading screen.
 
-### API Proxy Pattern
+Connecting last means the app never renders half-populated, and live events always land on a store that is already loaded.
 
-The client never calls the backend directly from the browser. Instead, all backend calls go through Next.js API routes (`app/api/...`), which:
-1. Verify the Supabase session server-side
-2. Extract the access token
-3. Forward the request to the backend with the token attached
+### Auth
 
-This keeps the backend URL and token handling off the client entirely.
+Supabase email and password auth. Registration is a server action (`register.ts`) that validates input with Zod, checks that the username is free, and calls `signUp` with `username` and `full_name` in the metadata. A database trigger turns that into a `profiles` row. Login uses the browser Supabase client. `proxy.ts` runs on every request, refreshes the session, and redirects anonymous visitors to `/login`.
 
-### Real-time Messaging
+### Two ways to reach the backend
 
-On load, the app connects to the backend Socket.IO server using the Supabase access token for auth. It then:
-1. Joins all of the user's rooms via `rooms:joinMany`
-2. Listens for `message:new` events and updates the Zustand store
-3. On send, adds an optimistic message instantly, then swaps it with the real one when the server confirms
+- **REST:** the browser calls same-origin `/api/*`. Route handlers read the session cookie, extract the access token, and forward the request to `BACKEND_BASE_URL` with `Authorization: Bearer …`. Multipart uploads are passed through as `FormData` so files stay real Blobs. Each call also forwards `X-Forwarded-For` (set by Traefik) via `lib/backend.ts`, so the backend rate-limits by the real client instead of treating every user as this one server.
+- **Socket.IO:** the browser connects **directly** to `NEXT_PUBLIC_BACKEND_URL`, passing the access token in the handshake. A WebSocket cannot go through a route handler.
 
-### Message Status Icons
+### Messaging
 
-Each message bubble shows a status indicator (visible only on your own messages):
-- `🕐` Pending — sent to server, awaiting confirmation
-- `✓` Sent — confirmed by server
-- `✓✓` Received — delivered to the room
+- **Optimistic send.** A message is added to the store immediately with an id like `temp-<uuid>` and status `pending`. When the server echoes `message:new` with the same `clientTempId`, the temporary entry is replaced by the real message (`sent`). On `message:error` or a failed upload it becomes `failed`.
+- **Text** goes over the socket (`message:send`). **Attachments** go over REST as multipart, and the server broadcasts the result over the socket.
+- **History** is paginated with a cursor: `GET /api/messages?roomId=…&limit=50&before=<created_at of oldest loaded>`. Scrolling to the top loads the next page. The slice reverses the newest-first response for display.
+- **Status icons** on your own messages: clock for *pending*, one check for *sent*, and a warning state for *failed*. There are no delivery or read receipts.
 
----
+### Why one store
 
-## Environment Variables
+All state lives in `useChatStore`, and components call store actions rather than touching the socket. That keeps every server event (friend request, invite, group edit, new message) funnelled through one place that mutates one source of truth. `selectedRoomId` is stored instead of a room object, and the room is derived with a selector, so the selected room can never drift out of sync with the room list.
 
-Create a `.env.local` file in the client root:
+## Environment variables
+
+Create `client/.env.local` (git-ignored):
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-supabase-host
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+NEXT_PUBLIC_BACKEND_URL=http://localhost:5000
 BACKEND_BASE_URL=http://localhost:5000
-NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your-cloud-name
-NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=hibiki_avatars
 ```
 
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) key |
-| `BACKEND_BASE_URL` | Backend URL for server-side fetch calls. Use `http://localhost:5000` locally, your Fly.io URL in production. Not exposed to the browser. |
-| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for avatar uploads |
-| `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Cloudinary upload preset configured for avatar images |
+| Variable | Read at | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | **build time** | Supabase API URL. Production: `https://supabase.mrsdev.in`. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **build time** | Supabase publishable (anon) key. Public by design. |
+| `NEXT_PUBLIC_BACKEND_URL` | **build time** | Backend URL **for the browser**: the Socket.IO target. Production: `https://backend-hibiki.mrsdev.in`. |
+| `BACKEND_BASE_URL` | runtime, server only | Backend URL **for Next.js server code**: where `/api/*` handlers and the home page send requests. In Kubernetes: `http://hibiki-server:5000`. Never sent to the browser. |
 
-In production, set `BACKEND_BASE_URL` to your deployed Fly.io backend URL (e.g. `https://hibiki-server.fly.dev`).
+`NEXT_PUBLIC_*` values are inlined into the JavaScript bundle by `next build`, so changing them requires a rebuild. In production they are passed as Docker build args by [`.github/workflows/build-client.yml`](../.github/workflows/build-client.yml).
 
----
-
-## Running Locally
+## Running locally
 
 ```bash
-# Install dependencies
 npm install
-
-# Start the dev server
-npm run dev
+npm run dev       # http://localhost:3000
 ```
 
-App will be available at `http://localhost:3000`.
+Run the [server](../server/README.md) on port 5000 first, since chat features need it.
 
-Make sure the backend is also running locally at port `5000` before testing the chat features.
+| Script | What it does |
+|---|---|
+| `npm run dev` | Next.js dev server |
+| `npm run build` | Production build (standalone output) |
+| `npm start` | Serve a production build |
+| `npm run lint` | ESLint |
 
----
+## Docker
 
-## Deployment (Vercel)
+```bash
+docker build -t hibiki-client \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://your-supabase-host \
+  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key \
+  --build-arg NEXT_PUBLIC_BACKEND_URL=http://localhost:5000 \
+  ./client
+docker run --rm -p 3000:3000 --add-host=host.docker.internal:host-gateway \
+  -e BACKEND_BASE_URL=http://host.docker.internal:5000 hibiki-client
+```
 
-The client is a standard Next.js app and deploys to Vercel with zero configuration:
+The runtime stage copies only the Next.js standalone output, static assets and `public/`, and runs `node server.js` as the unprivileged `node` user.
 
-1. Push to GitHub
-2. Import the repo on [vercel.com](https://vercel.com)
-3. Add the environment variables in the Vercel dashboard:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-   - `BACKEND_BASE_URL` → your Fly.io backend URL (e.g. `https://hibiki-server.fly.dev`)
-   - `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`
-   - `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET`
-4. Deploy
+## Deployment
+
+The client runs as a container on the project's own k3s cluster, built and rolled out automatically on every push to `main` that touches `client/`. See [Deployment](../docs/DEPLOYMENT.md).

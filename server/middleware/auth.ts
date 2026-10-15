@@ -12,6 +12,12 @@ declare global {
 }
 
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
+  // app.ts verifies the token once for all /api routes; each router also
+  // mounts this middleware. Skip re-verifying (one Supabase round trip per
+  // pass) when an earlier pass already set the identity — req.userId can
+  // only be set by this middleware, never by the client.
+  if (req.userId) return next();
+
   try {
     // 1️⃣ Extract Authorization header
     const authHeader = req.headers.authorization;
