@@ -32,6 +32,8 @@ spec:
               value: "0.0.0.0"            # Force it to listen on ALL interfaces instead.
             - name: BACKEND_BASE_URL
               value: "http://hibiki-server:5000"
+            - name: APP_URL                 # public address; email links and redirects are built from it
+              value: "https://hibiki.mrsdev.in"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

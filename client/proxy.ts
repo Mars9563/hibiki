@@ -12,8 +12,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - email-templates/ (Supabase Auth downloads these while signed out;
+     *   a redirect here would put the login page into the email)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|email-templates/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

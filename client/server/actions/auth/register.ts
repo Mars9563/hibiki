@@ -1,5 +1,6 @@
 'use server';
 
+import { appUrl } from '@/lib/app_url';
 import { createClient } from '@/lib/supabase/server';
 import { ApiResponse } from '@/lib/types';
 import { z } from 'zod';
@@ -74,6 +75,8 @@ export async function register(
       email,
       password,
       options: {
+        // Must match an entry in the Supabase Auth redirect allow list.
+        emailRedirectTo: `${appUrl()}/auth/callback`,
         data: {
           username,
           full_name: name,
