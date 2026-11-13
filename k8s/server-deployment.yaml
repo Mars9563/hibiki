@@ -27,7 +27,7 @@ spec:
       # No imagePullSecrets: the GHCR package is public, so the image pulls anonymously.
       containers:
         - name: hibiki-server
-          image: ghcr.io/mars9563/hibiki-server:36e0cbec83d02eaa28c95497c91a483ada973b7e
+          image: ghcr.io/mars9563/hibiki-server:96f1a40311029cc4fa29e3683eed237d26000b42
           ports:
             - containerPort: 5000   # the port the app listens on (informational)
           envFrom:
