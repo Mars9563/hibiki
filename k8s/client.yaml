@@ -24,7 +24,7 @@ spec:
         - name: ghcr-pull
       containers:
         - name: hibiki-client
-          image: ghcr.io/mars9563/hibiki-client:3c79160e620cfb1c36c896f7035123cdb397588e
+          image: ghcr.io/mars9563/hibiki-client:b92c41a7e33a5b0aa115de0665ebdcdf35a89e22
           ports:
             - containerPort: 3000
           env:
