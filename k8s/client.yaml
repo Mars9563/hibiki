@@ -20,8 +20,7 @@ spec:
         runAsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
-      imagePullSecrets:
-        - name: ghcr-pull
+      # No imagePullSecrets: the GHCR package is public, so the image pulls anonymously.
       containers:
         - name: hibiki-client
           image: ghcr.io/mars9563/hibiki-client:b92c41a7e33a5b0aa115de0665ebdcdf35a89e22

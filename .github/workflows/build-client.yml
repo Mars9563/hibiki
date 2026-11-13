@@ -9,20 +9,25 @@ on:
     paths:
       - 'client/**'
       - '.github/workflows/build-client.yml'
+  workflow_dispatch: # allow a manual re-run from the Actions tab
 
 permissions:
   contents: write # 'checkout' reads the repo AND the deploy step commits the manifest bump
   packages: write
 
+# One client deploy at a time; a newer push waits instead of racing the manifest bump.
+concurrency:
+  group: deploy-client
+  cancel-in-progress: false
+
 jobs:
   build-client:
-    runs-on: ubuntu-latest
+    # Native arm64 runner (free for public repos). No QEMU: emulating arm64 on x86 was
+    # slow and crashed `npm ci` with "qemu: uncaught target signal 4 (Illegal instruction)".
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,6 +57,9 @@ jobs:
           tags: |
             ghcr.io/mars9563/hibiki-client:latest
             ghcr.io/mars9563/hibiki-client:${{ github.sha }}
+          # Reuse unchanged layers (e.g. npm ci) between runs.
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,scope=client,mode=max
 
       # ---- CD: write the freshly-built image's SHA into the k8s manifest and commit.
       # Argo CD watches k8s/ on main and auto-syncs -> rolling deploy. No build loop:

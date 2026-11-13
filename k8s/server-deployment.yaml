@@ -24,8 +24,7 @@ spec:
         - ip: "10.0.0.112"
           hostnames:
             - "supabase.mrsdev.in"
-      imagePullSecrets:
-        - name: ghcr-pull           # use our GHCR creds to pull the private image
+      # No imagePullSecrets: the GHCR package is public, so the image pulls anonymously.
       containers:
         - name: hibiki-server
           image: ghcr.io/mars9563/hibiki-server:36e0cbec83d02eaa28c95497c91a483ada973b7e
